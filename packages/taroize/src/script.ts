@@ -60,8 +60,8 @@ export function parseScript (
         callee.isIdentifier({ name: 'Component' }) ||
         callee.isIdentifier({ name: 'App' })
       ) {
-        classDecl = parsePage(path, returned || t.nullLiteral(), json)!
         const componentType = callee.node.name
+        classDecl = parsePage(path, returned || t.nullLiteral(), json, componentType)!
         if (componentType !== 'App') {
           classDecl.decorators = [buildDecorator(componentType)]
         }
@@ -108,7 +108,8 @@ const stateKeys: string[] = []
 function parsePage (
   path: NodePath<t.CallExpression>,
   returned: t.Expression,
-  json?: t.ObjectExpression
+  json?: t.ObjectExpression,
+  componentType?: string
 ) {
   const arg = path.get('arguments')[0]
   if (!arg || !arg.isObjectExpression()) {
@@ -183,7 +184,7 @@ function parsePage (
   const renderFunc = buildRender(returned)
 
   return t.classDeclaration(
-    t.identifier(defaultClassName),
+    t.identifier(componentType === 'App' ? 'App' : defaultClassName),
     t.memberExpression(t.identifier('Taro'), t.identifier('Component')),
     t.classBody(classBody.concat(renderFunc)),
     []
