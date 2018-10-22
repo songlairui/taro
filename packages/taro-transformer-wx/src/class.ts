@@ -13,6 +13,7 @@ import { DEFAULT_Component_SET } from './constant'
 import { kebabCase, uniqueId } from 'lodash'
 import { RenderParser } from './render'
 import { findJSXAttrByName } from './jsx'
+import { Adapters, Adapter } from './adapter'
 import generate from 'babel-generator'
 
 type ClassMethodsMap = Map<string, NodePath<t.ClassMethod | t.ClassProperty>>
@@ -69,7 +70,8 @@ interface Result {
     name: string,
     path: string,
     type: string
-  }[]
+  }[],
+  componentProperies: string[]
 }
 
 interface Ref {
@@ -82,7 +84,8 @@ interface Ref {
 class Transformer {
   public result: Result = {
     template: '',
-    components: []
+    components: [],
+    componentProperies: []
   }
   private methods: ClassMethodsMap = new Map()
   private initState: Set<string> = new Set()
@@ -96,17 +99,19 @@ class Transformer {
   private usedState = new Set<string>()
   private loopStateName: Map<NodePath<t.CallExpression>, string> = new Map()
   private customComponentData: Array<t.ObjectProperty> = []
-  private componentProperies = new Set<string>()
+  private componentProperies: Set<string>
   private sourcePath: string
   private refs: Ref[] = []
 
   constructor (
     path: NodePath<t.ClassDeclaration>,
-    sourcePath: string
+    sourcePath: string,
+    componentProperies: string[]
   ) {
     this.classPath = path
     this.sourcePath = sourcePath
     this.moduleNames = Object.keys(path.scope.getAllBindings('module'))
+    this.componentProperies = new Set(componentProperies)
     this.compile()
   }
 
@@ -210,6 +215,18 @@ class Transformer {
           self.methods.set(name, path)
           if (name === 'render') {
             self.renderMethod = path
+            path.traverse({
+              ReturnStatement (returnPath) {
+                const arg = returnPath.node.argument
+                const ifStem = returnPath.findParent(p => p.isIfStatement())
+                if (ifStem && ifStem.isIfStatement() && arg === null) {
+                  const consequent = ifStem.get('consequent')
+                  if (consequent.isBlockStatement() && consequent.node.body.includes(returnPath.node)) {
+                    returnPath.get('argument').replaceWith(t.nullLiteral())
+                  }
+                }
+              }
+            })
           }
           if (name === 'constructor') {
             path.traverse({
@@ -277,6 +294,7 @@ class Transformer {
         const expression = path.get('expression') as NodePath<t.Expression>
         const scope = self.renderMethod && self.renderMethod.scope || path.scope
         const calleeExpr = expression.get('callee')
+        const parentPath = path.parentPath
         if (
           hasComplexExpression(expression) &&
           !(calleeExpr &&
@@ -285,6 +303,12 @@ class Transformer {
             calleeExpr.get('property').isIdentifier({ name: 'bind' })) // is not bind
         ) {
           generateAnonymousState(scope, expression, self.jsxReferencedIdentifiers)
+        } else {
+          if (parentPath.isJSXAttribute()) {
+            if (!(expression.isMemberExpression() || expression.isIdentifier()) && parentPath.node.name.name === 'key') {
+              generateAnonymousState(scope, expression, self.jsxReferencedIdentifiers)
+            }
+          }
         }
         const attr = path.findParent(p => p.isJSXAttribute()) as NodePath<t.JSXAttribute>
         if (!attr) return
@@ -366,7 +390,7 @@ class Transformer {
       CallExpression (path) {
         const node = path.node
         const callee = node.callee
-        if (t.isMemberExpression(callee) && t.isMemberExpression(callee.object)) {
+        if (t.isMemberExpression(callee) && t.isMemberExpression(callee.object) && Adapters.alipay !== Adapter.type) {
           const property = callee.property
           if (t.isIdentifier(property)) {
             if (property.name.startsWith('on')) {
@@ -555,6 +579,7 @@ class Transformer {
     this.findMoreProps()
     this.handleRefs()
     this.parseRender()
+    this.result.componentProperies = [...this.componentProperies]
   }
 }
 

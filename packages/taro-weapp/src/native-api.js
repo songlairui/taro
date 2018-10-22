@@ -4,7 +4,7 @@ import {
   otherApis,
   initPxTransform
 } from '@tarojs/taro'
-import { cacheDataSet } from './data-cache'
+import { cacheDataSet, cacheDataGet } from './data-cache'
 import { queryToJson, getUniqueKey } from './util'
 const RequestQueue = {
   MAX_REQUEST: 5,
@@ -71,6 +71,8 @@ function processApis (taro) {
     'reLaunch': true
   }
   const routerParamsPrivateKey = '__key_'
+  const preloadPrivateKey = '__preload_'
+  const preloadInitedComponent = '$preloadComponent'
   Object.keys(weApis).forEach(key => {
     if (!onAndSyncApis[key] && !noPromiseApis[key]) {
       taro[key] = options => {
@@ -80,6 +82,25 @@ function processApis (taro) {
         if (typeof options === 'string') {
           return wx[key](options)
         }
+
+        if (key === 'navigateTo' || key === 'redirectTo' || key === 'switchTab') {
+          let url = obj['url'] ? obj['url'].replace(/^\//, '') : ''
+          if (url.indexOf('?') > -1) url = url.split('?')[0]
+
+          const Component = cacheDataGet(url)
+          if (Component) {
+            const component = new Component()
+            if (component.componentWillPreload) {
+              const cacheKey = getUniqueKey()
+              const MarkIndex = obj.url.indexOf('?')
+              const params = queryToJson(obj.url.substring(MarkIndex + 1, obj.url.length))
+              obj.url += (MarkIndex > -1 ? '&' : '?') + `${preloadPrivateKey}=${cacheKey}`
+              cacheDataSet(cacheKey, component.componentWillPreload(params))
+              cacheDataSet(preloadInitedComponent, component)
+            }
+          }
+        }
+
         if (useDataCacheApis[key]) {
           const url = obj['url'] = obj['url'] || ''
           const MarkIndex = url.indexOf('?')
@@ -88,16 +109,13 @@ function processApis (taro) {
           obj.url += (MarkIndex > -1 ? '&' : '?') + `${routerParamsPrivateKey}=${cacheKey}`
           cacheDataSet(cacheKey, params)
         }
+
         const p = new Promise((resolve, reject) => {
           ['fail', 'success', 'complete'].forEach((k) => {
             obj[k] = (res) => {
               options[k] && options[k](res)
               if (k === 'success') {
-                if (key === 'connectSocket') {
-                  resolve(task)
-                } else {
-                  resolve(res)
-                }
+                resolve(res)
               } else if (k === 'fail') {
                 reject(res)
               }
@@ -130,9 +148,17 @@ function pxTransform (size) {
   const { designWidth, deviceRatio } = this.config
   if (!(designWidth in deviceRatio)) {
     throw new Error(`deviceRatio 配置中不存在 ${designWidth} 的设置！`)
-    return
   }
   return parseInt(size, 10) / deviceRatio[designWidth] + 'rpx'
+}
+
+function canIUseWebp () {
+  const { platform } = wx.getSystemInfoSync()
+  const platformLower = platform.toLowerCase()
+  if (platformLower === 'android' || platformLower === 'devtools') {
+    return true
+  }
+  return false
 }
 
 export default function initNativeApi (taro) {
@@ -140,6 +166,8 @@ export default function initNativeApi (taro) {
   taro.request = request
   taro.getCurrentPages = getCurrentPages
   taro.getApp = getApp
+  taro.requirePlugin = requirePlugin
   taro.initPxTransform = initPxTransform.bind(taro)
   taro.pxTransform = pxTransform.bind(taro)
+  taro.canIUseWebp = canIUseWebp
 }

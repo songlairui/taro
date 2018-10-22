@@ -37,11 +37,11 @@ sidebar_label: Picker
 | 微信小程序 | H5 | ReactNative| 属性名 | 类型 | 默认值 | 说明 |
 | :-: | :-: | :-: | :- | :- | :- | :- |
 | √ | √ | √ | value      | String      |   | 表示选中的时间，格式为'hh:mm'       |
-| √ | √ | x (IOS支持) | start      | String      |   | 表示有效时间范围的开始，字符串格式为'hh:mm'               |
-| √ | √ | x (IOS支持) | end        | String      |   | 表示有效时间范围的结束，字符串格式为'hh:mm'               |
+| √ | √ | x (IOS 支持) | start      | String      |   | 表示有效时间范围的开始，字符串格式为'hh:mm'               |
+| √ | √ | x (IOS 支持) | end        | String      |   | 表示有效时间范围的结束，字符串格式为'hh:mm'               |
 | √ | √ | √ | onChange | EventHandle |   | value 改变时触发 change 事件，event.detail = value: value |
 | √ | √ | √ | onCancel | EventHandle |   | 取消选择或点遮罩层收起 picker 时触发                      |
-| √ | √ | x (IOS支持) | disabled   | Boolean     | false  | 是否禁用                                                  |
+| √ | √ | x (IOS 支持) | disabled   | Boolean     | false  | 是否禁用                                                  |
 
 ##### 日期选择器：mode = date
 
@@ -57,77 +57,82 @@ sidebar_label: Picker
 | √ | √ | √ | onCancel | EventHandle |            | 取消选择或点遮罩层收起 picker 时触发                      |
 | √ | √ | √ | disabled   | Boolean     | false      | 是否禁用                                                  |
 
+> fields 有效值：
+
+| 值 | 说明 |
+| :-: | :-: |
+| year | 选择器粒度为年 |
+| month | 选择器粒度为月份 |
+| day | 选择器粒度为天 |
+
+
 ###### 示例：
 ```jsx
 import Taro, { Component } from '@tarojs/taro'
 import { View, Text, Picker } from '@tarojs/components'
 
 export default class PagePicker extends Component {
-    constructor() {
-        super(...arguments)
-    }
+  state = {
+    selector: ['美国', '中国', '巴西', '日本'],
+    selectorChecked: '美国',
+    timeSel: '12:01',
+    dateSel: '2018-04-22'
+  }
 
-    state = {
-        selector: ['美国', '中国', '巴西', '日本'],
-        selectorChecked: '美国',
-        timeSel: '12:01',
-        dateSel: '2018-04-22',
-    }
+  onChange = e => {
+    this.setState({
+      selectorChecked: this.state.selector[e.detail.value]
+    })
+  }
 
-    onChange = e => {
-        this.setState({
-            selectorChecked: this.state.selector[e.detail.value]
-        })
-    }
+  onTimeChange = e => {
+    this.setState({
+      timeSel: e.detail.value
+    })
+  }
+  onDateChange = e => {
+    this.setState({
+      dateSel: e.detail.value
+    })
+  }
 
-    onTimeChange = e => {
-        this.setState({
-            timeSel: e.detail.value
-        })
-    }
-    onDateChange = e => {
-        this.setState({
-            dateSel: e.detail.value
-        })
-    }
-
-    render() {
-        return (
-            <View className='container'>
-                <View className='page-body'>
-                    <View className='page-section'>
-                        <Text>地区选择器</Text>
-                        <View>
-                            <Picker mode='selector' range={this.state.selector} onChange={this.onChange}>
-                                <View className='picker'>
-                                    当前选择：{this.state.selectorChecked}
-                                </View>
-                            </Picker>
-                        </View>
-                    </View>
-                    <View className='page-section'>
-                        <Text>时间选择器</Text>
-                        <View>
-                            <Picker mode='time' onChange={this.onTimeChange}>
-                                <View className='picker'>
-                                    当前选择：{this.state.timeSel}
-                                </View>
-                            </Picker>
-                        </View>
-                    </View>
-                    <View className='page-section'>
-                        <Text>日期选择器</Text>
-                        <View>
-                            <Picker mode='date' onChange={this.onDateChange}>
-                                <View className='picker'>
-                                    当前选择：{this.state.dateSel}
-                                </View>
-                            </Picker>
-                        </View>
-                    </View>
+  render () {
+    return (
+      <View className='container'>
+        <View className='page-body'>
+          <View className='page-section'>
+            <Text>地区选择器</Text>
+            <View>
+              <Picker mode='selector' range={this.state.selector} onChange={this.onChange}>
+                <View className='picker'>
+                  当前选择：{this.state.selectorChecked}
                 </View>
+              </Picker>
             </View>
-        )
-    }
+          </View>
+          <View className='page-section'>
+            <Text>时间选择器</Text>
+            <View>
+              <Picker mode='time' onChange={this.onTimeChange}>
+                <View className='picker'>
+                  当前选择：{this.state.timeSel}
+                </View>
+              </Picker>
+            </View>
+          </View>
+          <View className='page-section'>
+            <Text>日期选择器</Text>
+            <View>
+              <Picker mode='date' onChange={this.onDateChange}>
+                <View className='picker'>
+                  当前选择：{this.state.dateSel}
+                </View>
+              </Picker>
+            </View>
+          </View>
+        </View>
+      </View>
+    )
+  }
 }
 ```

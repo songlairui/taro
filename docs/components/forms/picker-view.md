@@ -14,7 +14,7 @@ sidebar_label: PickerView
 | √ | x | x | indicatorClass      | String   | 设置选择器中间选中框的类名   |
 | √ | x | x | maskStyle | String  | 设置蒙层的样式  |
 | √ | x | x | maskClass | String| 设置蒙层的类名     |
-| √ | x | x | onChange   | EventHandle | 当滚动选择，value 改变时触发 change 事件，event.detail = {value: value}；value为数组，表示 picker-view 内的 picker-view-column 当前选择的是第几项（下标从 0 开始） |
+| √ | x | x | onChange   | EventHandle | 当滚动选择，value 改变时触发 change 事件，event.detail = {value: value}；value 为数组，表示 picker-view 内的 picker-view-column 当前选择的是第几项（下标从 0 开始） |
 
 ##### PickerViewColumn
 
@@ -29,7 +29,7 @@ import { View, PickerView, PickerViewColumn } from '@tarojs/components'
 
 export default class Picks extends Component {
 
-  constructor() {
+  constructor () {
     super(...arguments)
     const date = new Date()
     const years = []
@@ -51,7 +51,7 @@ export default class Picks extends Component {
       month: 2,
       days: days,
       day: 2,
-      value: [9999, 1, 1],
+      value: [9999, 1, 1]
     }
   }
 
@@ -81,14 +81,14 @@ export default class Picks extends Component {
             {this.state.months.map(item => {
               return (
                 <View>{item}月</View>
-              );
+              )
             })}
           </PickerViewColumn>
           <PickerViewColumn>
             {this.state.days.map(item => {
               return (
                 <View>{item}日</View>
-              );
+              )
             })}
           </PickerViewColumn>
         </PickerView>

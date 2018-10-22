@@ -1,10 +1,12 @@
 import { isEmptyObject, noop } from './util'
 import { updateComponent } from './lifecycle'
-import { cacheDataGet, cacheDataHas } from './data-cache'
+import { cacheDataSet, cacheDataGet, cacheDataHas } from './data-cache'
 const privatePropValName = '__triggerObserer'
 const anonymousFnNamePreffix = 'func__'
 const componentFnReg = /^__fn_/
 const routerParamsPrivateKey = '__key_'
+const preloadPrivateKey = '__preload_'
+const preloadInitedComponent = '$preloadComponent'
 const pageExtraFns = ['onPullDownRefresh', 'onReachBottom', 'onShareAppMessage', 'onPageScroll', 'onTabItemTap']
 
 function bindProperties (weappComponentConf, ComponentClass, isPage) {
@@ -12,15 +14,28 @@ function bindProperties (weappComponentConf, ComponentClass, isPage) {
   const defaultProps = ComponentClass.defaultProps || {}
   for (const key in defaultProps) {
     if (defaultProps.hasOwnProperty(key)) {
-      weappComponentConf.properties[key] = null
+      weappComponentConf.properties[key] = {
+        type: null,
+        value: null
+      }
     }
   }
   if (isPage) {
-    weappComponentConf.properties[routerParamsPrivateKey] = null
+    weappComponentConf.properties[routerParamsPrivateKey] = {
+      type: null,
+      value: null
+    }
+    weappComponentConf.properties[preloadPrivateKey] = {
+      type: null,
+      value: null
+    }
     const defaultParams = ComponentClass.defaultParams || {}
     for (const key in defaultParams) {
       if (defaultParams.hasOwnProperty(key)) {
-        weappComponentConf.properties[key] = null
+        weappComponentConf.properties[key] = {
+          type: null,
+          value: null
+        }
       }
     }
   }
@@ -72,7 +87,9 @@ function processEvent (eventHandlerName, obj) {
       event.preventDefault = function () {}
       event.stopPropagation = function () {}
       event.currentTarget = event.currentTarget || event.target || {}
-      Object.assign(event.target, event.detail)
+      if (event.target) {
+        Object.assign(event.target, event.detail)
+      }
       Object.assign(event.currentTarget, event.detail)
     }
 
@@ -108,9 +125,8 @@ function processEvent (eventHandlerName, obj) {
       if ('so' in bindArgs) {
         if (bindArgs['so'] !== 'this') {
           callScope = bindArgs['so']
-        } else {
-          isScopeBinded = true
         }
+        isScopeBinded = true
         delete bindArgs['so']
       }
       if (detailArgs.length > 0) {
@@ -129,9 +145,8 @@ function processEvent (eventHandlerName, obj) {
       if ('so' in bindArgs) {
         if (bindArgs['so'] !== 'this') {
           _scope = bindArgs['so']
-        } else {
-          isScopeBinded = false
         }
+        isScopeBinded = true
         delete bindArgs['so']
       }
       if (detailArgs.length > 0) {
@@ -143,7 +158,7 @@ function processEvent (eventHandlerName, obj) {
           .sort()
           .map(key => bindArgs[key])
       }
-      realArgs = [callScope || _scope, ...datasetArgs, ...detailArgs, event]
+      realArgs = [_scope, ...datasetArgs, ...detailArgs, event]
     }
     scope[eventHandlerName].apply(callScope, realArgs)
   }
@@ -166,7 +181,7 @@ function filterProps (properties, defaultProps = {}, componentProps = {}, weappC
     if (typeof componentProps[propName] === 'function') {
       newProps[propName] = componentProps[propName]
     } else if (propName in weappComponentData &&
-      (properties[propName] !== null || weappComponentData[propName] !== null)) {
+      (properties[propName].value !== null || weappComponentData[propName] !== null)) {
       newProps[propName] = weappComponentData[propName]
     }
     if (componentFnReg.test(propName)) {
@@ -197,52 +212,17 @@ function filterParams (data, defaultParams = {}) {
 
 export function componentTrigger (component, key, args) {
   args = args || []
-  if (key === 'componentWillMount') {
-    if (component['$$refs'] && component['$$refs'].length > 0) {
-      let refs = {}
-      component['$$refs'].forEach(ref => {
-        let target
-        if (ref.type === 'component') {
-          target = component.$scope.selectComponent(`#${ref.id}`)
-          target = target.$component || target
-          if ('refName' in ref && ref['refName']) {
-            refs[ref.refName] = target
-          } else if ('fn' in ref && typeof ref['fn'] === 'function') {
-            ref['fn'].call(component, target)
-          }
-        }
-      })
-      component.refs = Object.assign({}, component.refs || {}, refs)
-    }
-  }
+
   if (key === 'componentDidMount') {
     if (component['$$refs'] && component['$$refs'].length > 0) {
       let refs = {}
       component['$$refs'].forEach(ref => {
         let target
-        const query = wx.createSelectorQuery().in(component.$scope)
-        if (ref.type === 'dom') {
-          target = query.select(`#${ref.id}`)
-          if ('refName' in ref && ref['refName']) {
-            refs[ref.refName] = target
-          } else if ('fn' in ref && typeof ref['fn'] === 'function') {
-            ref['fn'].call(component, target)
-          }
-        }
-      })
-      component.refs = Object.assign({}, component.refs || {}, refs)
-    }
-  }
-  if (key === 'componentDidMount') {
-    if (component['$$refs'] && component['$$refs'].length > 0) {
-      let refs = {}
-      component['$$refs'].forEach(ref => {
-        let target
-        const query = wx.createSelectorQuery().in(component.$scope)
         if (ref.type === 'component') {
           target = component.$scope.selectComponent(`#${ref.id}`)
           target = target.$component || target
         } else {
+          const query = wx.createSelectorQuery().in(component.$scope)
           target = query.select(`#${ref.id}`)
         }
         if ('refName' in ref && ref['refName']) {
@@ -250,10 +230,12 @@ export function componentTrigger (component, key, args) {
         } else if ('fn' in ref && typeof ref['fn'] === 'function') {
           ref['fn'].call(component, target)
         }
+        ref.target = target
       })
-      component.refs = refs
+      component.refs = Object.assign({}, component.refs || {}, refs)
     }
   }
+
   if (key === 'componentWillUnmount') {
     component._dirty = true
     component._disable = true
@@ -268,6 +250,13 @@ export function componentTrigger (component, key, args) {
     component._dirty = false
     component._disable = false
     component.state = component.getState()
+  }
+  if (key === 'componentWillUnmount') {
+    // refs
+    if (component['$$refs'] && component['$$refs'].length > 0) {
+      component['$$refs'].forEach(ref => typeof ref['fn'] === 'function' && ref['fn'].call(component, null))
+      component.refs = {}
+    }
   }
 }
 
@@ -304,14 +293,20 @@ function createComponent (ComponentClass, isPage) {
   const weappComponentConf = {
     data: initData,
     created (options = {}) {
-      this.$component = componentInstance.$scope ? new ComponentClass() : componentInstance
+      if (isPage && cacheDataHas(preloadInitedComponent)) {
+        this.$component = cacheDataGet(preloadInitedComponent, true)
+      } else {
+        this.$component = new ComponentClass()
+      }
       this.$component._init(this)
       this.$component.render = this.$component._createData
+      this.$component.__propTypes = ComponentClass.propTypes
       Object.assign(this.$component.$router.params, options)
     },
     attached () {
       let hasParamsCache
       if (isPage) {
+        // params
         let params = {}
         hasParamsCache = cacheDataHas(this.data[routerParamsPrivateKey])
         if (hasParamsCache) {
@@ -321,6 +316,12 @@ function createComponent (ComponentClass, isPage) {
           params = filterParams(this.data, ComponentClass.defaultParams)
         }
         Object.assign(this.$component.$router.params, params)
+        // preload
+        if (cacheDataHas(this.data[preloadPrivateKey])) {
+          this.$component.$preloadData = cacheDataGet(this.data[preloadPrivateKey], true)
+        } else {
+          this.$component.$preloadData = null
+        }
       }
       if (!isPage || hasParamsCache || ComponentClass.defaultParams) {
         initComponent.apply(this, [ComponentClass, isPage])
@@ -363,6 +364,7 @@ function createComponent (ComponentClass, isPage) {
         }
       }
     })
+    __wxRoute && cacheDataSet(__wxRoute, ComponentClass)
   }
   bindProperties(weappComponentConf, ComponentClass, isPage)
   bindBehaviors(weappComponentConf, ComponentClass)

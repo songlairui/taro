@@ -1,3 +1,5 @@
+import { buffer } from "rxjs/operators";
+
 export = Taro;
 export as namespace Taro;
 
@@ -20,6 +22,64 @@ declare namespace Taro {
     isEntryPage: boolean
   }
 
+  interface PageScrollObject {
+    /**
+     * 页面在垂直方向已滚动的距离（单位px）
+     */
+    scrollTop: number
+  }
+
+  interface ShareAppMessageObject {
+    /**
+     * 转发事件来源
+     */
+    from?: string,
+    /**
+     * 如果 from 值是 button，则 target 是触发这次转发事件的 button，否则为 undefined
+     */
+    target?: object,
+    /**
+     * 页面中包含<web-view>组件时，返回当前<web-view>的url
+     */
+    webViewUrl?: string
+  }
+
+  interface ShareAppMessageReturn {
+    /**
+     * 	转发标题，默认为当前小程序名称
+     */
+    title?: string,
+
+    /**
+     * 转发路径，必须是以 / 开头的完整路径，默认为当前页面 path
+     */
+    path?: string,
+
+    /**
+     * 自定义图片路径，可以是本地文件路径、代码包文件路径或者网络图片路径
+     * 支持PNG及JPG
+     * 显示图片长宽比是 5:4
+     */
+    imageUrl?: string
+  }
+
+  interface TabItemTapObject {
+    /**
+     * 被点击tabItem的序号，从0开始
+     */
+    index: string,
+
+    /**
+     * 被点击tabItem的页面路径
+     */
+    pagePath: string,
+
+    /**
+     * 被点击tabItem的按钮文字
+     */
+    text: string
+  }
+
   // Components
   interface ComponentLifecycle<P, S> {
     componentWillMount?(): void;
@@ -29,10 +89,16 @@ declare namespace Taro {
     componentWillUpdate?(nextProps: Readonly<P>, nextState: Readonly<S>, nextContext: any): void;
     componentDidUpdate?(prevProps: Readonly<P>, prevState: Readonly<S>, prevContext: any): void;
     componentWillUnmount?(): void;
+    componentWillPreload?(params: {[propName: string]: any}): any;
     componentDidShow?(): void;
     componentDidHide?(): void;
     componentDidCatchError?(err: string): void;
     componentDidNotFound?(obj: PageNotFoundObject): void;
+    onPullDownRefresh?(): void;
+    onReachBottom?(): void;
+    onPageScroll?(obj: PageScrollObject): void;
+    onShareAppMessage?(obj: ShareAppMessageObject): ShareAppMessageReturn;
+    onTabItemTap?(obj: TabItemTapObject): void;
   }
 
   interface Component<P = {}, S = {}> extends ComponentLifecycle<P, S> {
@@ -55,6 +121,12 @@ declare namespace Taro {
      */
     navigationBarTitleText?: string,
     /**
+     * 导航栏样式，仅支持以下值：
+     * default 默认样式
+     * custom 自定义导航栏
+     */
+    navigationStyle?: string,
+    /**
      * 窗口的背景色， HexColor
      * default: #ffffff
      */
@@ -74,6 +146,11 @@ declare namespace Taro {
      * default: 50
      */
     onReachBottomDistance?: number
+    /**
+     * 设置为 true 则页面整体不能上下滚动；只在页面配置中有效，无法在 app.json 中设置该项
+     * default: false
+     */
+    disableScroll?: boolean
   }
 
   interface TarbarList {
@@ -122,12 +199,136 @@ declare namespace Taro {
     list: TarbarList[]
   }
 
+  interface NetworkTimeout {
+    /**
+     * wx.request 的超时时间，单位毫秒。
+     * @default 60000
+     */
+    request?: number
+    /**
+     * wx.connectSocket 的超时时间，单位毫秒。
+     * @default 60000
+     */
+    connectSocket?: number
+    /**
+     * wx.uploadFile 的超时时间，单位毫秒。
+     * @default 60000
+     */
+    uploadFile?: number
+    /**
+     * wx.downloadFile 的超时时间，单位毫秒。
+     * @default 60000
+     */
+    downloadFile?: number
+  }
+
+  interface SubPackage {
+    /**
+     * 分包根路径
+     * - 注意：不能放在主包pages目录下
+     */
+    root: string,
+    /**
+     * 分包路径下的所有页面配置
+     */
+    pages: string[]
+  }
+
+  interface Plugins {
+    [key: string]: {
+      version: string
+      provider: string
+    }
+  }
+
+  interface PreloadRule {
+    [key: string]: {
+      /**
+       *进入页面后预下载分包的 root 或 name。__APP__ 表示主包。
+       */
+      packages: string[]
+      /**
+       * 在指定网络下预下载，可选值为：
+       * all: 不限网络
+       * wifi: 仅wifi下预下载
+       * @default wifi
+       */
+      network?: 'all' | 'wifi'
+    }
+  }
+
   interface AppConfig {
     /**
      * 接受一个数组，每一项都是字符串，来指定小程序由哪些页面组成，数组的第一项代表小程序的初始页面
      */
     pages?: string[],
-    tabBar?: TabBar
+    tabBar?: TabBar,
+    /**
+     * 各类网络请求的超时时间，单位均为毫秒。
+     */
+    networkTimeout?: NetworkTimeout
+    /**
+     * 是否开启 debug 模式，默认关闭
+     * @default false
+     */
+    debug?: boolean
+    /**
+     * 启用插件功能页时，插件所有者小程序需要设置其 functionalPages 为 true。
+     * @see https://developers.weixin.qq.com/miniprogram/dev/framework/plugin/functional-pages.html
+     * @default false
+     * @since 2.1.0
+     */
+    functionalPages?: boolean
+    /**
+     * 分包加载配置
+     * 示例:
+     * [
+     *   {
+     *     root: 'packages/module',
+     *     pages: [
+     *       'pages/page/index'
+     *     ]
+     *   }
+     * ]
+     * @since 1.7.3
+     */
+    subPackages?: SubPackage[]
+    /**
+     * Worker 代码放置的目录
+     * 使用 Worker 处理多线程任务时，设置 Worker 代码放置的目录
+     * @since 1.9.9
+      */
+    workers?: string
+    /**
+     * 申明需要后台运行的能力，类型为数组。目前支持以下项目：
+     * @since 微信客户端 6.7.2 及以上版本支持
+     */
+    requiredBackgroundModes?: ["audio"]
+    /**
+     * 使用到的插件
+     * @since 1.9.6
+     */
+    plugins?: Plugins
+    /**
+     * 声明分包预下载的规则。
+     * preloadRule 中，key 是页面路径，value 是进入此页面的预下载配置
+     * 注意: 分包预下载目前只支持通过配置方式使用，暂不支持通过调用API完成。
+     *      vConsole 里有preloadSubpackages开头的日志信息，可以用来验证预下载的情况。
+     * @since 2.3.0
+     */
+    preloadRule?: PreloadRule
+    /**
+     * iPad 小程序是否支持屏幕旋转
+     * @default false
+     * @since 2.3.0
+     */
+    resizable?: boolean,
+
+    /**
+     * Worker 代码放置的目录
+     * @since 1.9.90
+     */
+    workers: string
   }
 
   interface Config extends PageConfig, AppConfig {
@@ -179,9 +380,14 @@ declare namespace Taro {
     on(eventName: string | symbol, listener: (...args: any[]) => void): this;
 
     /**
+     * 添加一个事件监听，并在事件触发完成之后移除Callbacks链
+     */
+    once(eventName: string | symbol, listener: (...args: any[]) => void): this;
+
+    /**
      * 取消监听一个事件
      */
-    off(eventName: string | symbol, listener: (...args: any[]) => void): this;
+    off(eventName: string | symbol, listener?: (...args: any[]) => void): this;
 
     /**
      * 触发一个事件，传参
@@ -194,7 +400,9 @@ declare namespace Taro {
   namespace eventCenter {
     function on(eventName: string | symbol, listener: (...args: any[]) => void): void;
 
-    function off(eventName: string | symbol, listener: (...args: any[]) => void): void;
+    function once(eventName: string | symbol, listener: (...args: any[]) => void): void;
+
+    function off(eventName: string | symbol, listener?: (...args: any[]) => void): void;
 
     function trigger(eventName: string | symbol, ...args: any[]): boolean;
   }
@@ -207,7 +415,6 @@ declare namespace Taro {
     RN = 'RN'
   }
 
-
   function getEnv(): ENV_TYPE.WEAPP | ENV_TYPE.WEB | ENV_TYPE.RN;
 
   function render(component: Component | JSX.Element, element: Element | null)
@@ -216,6 +423,11 @@ declare namespace Taro {
   function internal_safe_get (...arg): any
 
   function pxTransform(size: number): string
+
+  /**
+   * 小程序引用插件 JS 接口
+   */
+  function requirePlugin(pluginName: string): any
 
   /**
    *
@@ -288,7 +500,7 @@ declare namespace Taro {
        *
        * @default false
        */
-      jsonp?: boolean,          
+      jsonp?: boolean,
       /**
        * 设置H5端 jsonp 请求 url 是否需要被缓存
        *
@@ -370,6 +582,28 @@ declare namespace Taro {
    * @see https://developers.weixin.qq.com/miniprogram/dev/api/network-request.html#wxrequestobject
    */
   function request<T = any, U = any>(OBJECT: request.Param<U>): Promise<request.Promised<T>>
+
+  type arrayBuffer = Uint8Array |
+    Int8Array |
+    Uint8Array |
+    Uint8ClampedArray |
+    Int16Array |
+    Uint16Array |
+    Int32Array |
+    Uint32Array |
+    Float32Array |
+    Float64Array |
+    ArrayBuffer
+
+  /**
+   * 将 ArrayBuffer 数据转成 Base64 字符串
+   */
+  function arrayBufferToBase64(buffer: arrayBuffer): string
+
+  /**
+   * 将 Base64 字符串转成 ArrayBuffer 数据
+   */
+  function base64ToArrayBuffer(base64: string): arrayBuffer
 
   namespace uploadFile {
     type Promised = {
@@ -10104,87 +10338,29 @@ declare namespace Taro {
      *     })
      *     ```
      */
-    drawImage(dx: number, dy: number): void
-    /**
-     *
-     * **定义：**
-     *
-     * 绘制图像到画布。
-     *
-     * **参数：**
-     *
-     *   参数            |  类型     |  说明
-     * ------------------|-----------|-------------------------------
-     *   imageResource   |  String   |  所要绘制的图片资源
-     *   dx              |  Number   |图像的左上角在目标canvas上 X 轴的位置
-     *   dy              |  Number   |图像的左上角在目标canvas上 Y 轴的位置
-     *   dWidth          |  Number   |在目标画布上绘制图像的宽度，允许对绘制的图像进行缩放
-     *   dHeigt          |  Number   |在目标画布上绘制图像的高度，允许对绘制的图像进行缩放
-     *   sx              |  Number   |源图像的矩形选择框的左上角 X 坐标
-     *   sy              |  Number   |源图像的矩形选择框的左上角 Y 坐标
-     *   sWidth          |  Number   |  源图像的矩形选择框的高度
-     *   sHeight         |  Number   |  源图像的矩形选择框的高度
-     *
-     * **有三个版本的写法：**
-     *
-     * *   drawImage(dx, dy)
-     * *   drawImage(dx, dy, dWidth, dHeight)
-     * *   drawImage(sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight) **从 1.9.0 起支持**
-     *
-     * **例子：**
-     *
-     *     ```javascript
-     *     const ctx = Taro.createCanvasContext('myCanvas')
-     *
-     *     Taro.chooseImage({
-     *       success: function(res){
-     *         ctx.drawImage(res.tempFilePaths[0], 0, 0, 150, 100)
-     *         ctx.draw()
-     *       }
-     *     })
-     *     ```
-     */
-    drawImage(dx: number, dy: number, dWidth: number, dHeight: any): void
-    /**
-     *
-     * **定义：**
-     *
-     * 绘制图像到画布。
-     *
-     * **参数：**
-     *
-     *   参数            |  类型     |  说明
-     * ------------------|-----------|-------------------------------
-     *   imageResource   |  String   |  所要绘制的图片资源
-     *   dx              |  Number   |图像的左上角在目标canvas上 X 轴的位置
-     *   dy              |  Number   |图像的左上角在目标canvas上 Y 轴的位置
-     *   dWidth          |  Number   |在目标画布上绘制图像的宽度，允许对绘制的图像进行缩放
-     *   dHeigt          |  Number   |在目标画布上绘制图像的高度，允许对绘制的图像进行缩放
-     *   sx              |  Number   |源图像的矩形选择框的左上角 X 坐标
-     *   sy              |  Number   |源图像的矩形选择框的左上角 Y 坐标
-     *   sWidth          |  Number   |  源图像的矩形选择框的高度
-     *   sHeight         |  Number   |  源图像的矩形选择框的高度
-     *
-     * **有三个版本的写法：**
-     *
-     * *   drawImage(dx, dy)
-     * *   drawImage(dx, dy, dWidth, dHeight)
-     * *   drawImage(sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight) **从 1.9.0 起支持**
-     *
-     * **例子：**
-     *
-     *     ```javascript
-     *     const ctx = Taro.createCanvasContext('myCanvas')
-     *
-     *     Taro.chooseImage({
-     *       success: function(res){
-     *         ctx.drawImage(res.tempFilePaths[0], 0, 0, 150, 100)
-     *         ctx.draw()
-     *       }
-     *     })
-     *     ```
-     */
-    drawImage(sx: number, sy: number, sWidth: number, sHeight: number, dx: number, dy: number, dWidth: number, dHeight: any): void
+    drawImage(
+      imageResource: string,
+      dx: number,
+      dy: number,
+    ): void
+    drawImage(
+      imageResource: string,
+      dx: number,
+      dy: number,
+      dWidth: number,
+      dHeight: number,
+    ): void
+    drawImage(
+      imageResource: string,
+      sx: number,
+      sy: number,
+      sWidth: number,
+      sHeight: number,
+      dx: number,
+      dy: number,
+      dWidth: number,
+      dHeight: number,
+    ): void
     /**
      *
      * **定义：**
