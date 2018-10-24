@@ -2,7 +2,7 @@ import * as t from 'babel-types'
 import traverse, { NodePath } from 'babel-traverse'
 import { transform } from 'babel-core'
 import { buildImportStatement, codeFrameError } from './utils'
-import { usedComponents } from './wxml'
+import { usedComponents, WXS } from './wxml'
 import { PageLifecycle } from './lifecycle'
 
 const buildDecorator = (type: string) =>
@@ -13,7 +13,8 @@ const buildDecorator = (type: string) =>
 export function parseScript (
   script?: string,
   returned?: t.Expression,
-  json?: t.ObjectExpression
+  json?: t.ObjectExpression,
+  wxses: WXS[] = []
 ) {
   script = script || 'Page({})'
   const { ast } = transform(script, {
@@ -85,7 +86,12 @@ export function parseScript (
     [],
     'withWeapp'
   )
-  ast.program.body.unshift(taroComponentsImport, taroImport, withWeappImport)
+  ast.program.body.unshift(
+    taroComponentsImport,
+    taroImport,
+    withWeappImport,
+    ...wxses.map(wxs => buildImportStatement(wxs.src, [], wxs.module))
+  )
 
   return ast
 }
